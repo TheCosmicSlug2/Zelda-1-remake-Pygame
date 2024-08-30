@@ -1,5 +1,5 @@
 from random import randint
-from Settings import *
+from settings import *
 
 class Loot:
     def __init__(self, posx: int, posy: int, player):
@@ -26,7 +26,7 @@ class Loot:
         else:
             loot_idx = 1
 
-        self.loot_type, self.dims = self.dic_loot_rng_to_type[loot_idx] # Indice négatif si aucun loot
+        self.type, self.dims = self.dic_loot_rng_to_type[loot_idx] # Indice négatif si aucun loot
         self.sprite_id = self.get_sprite_id()
         self.player = player
 
@@ -44,5 +44,5 @@ class Loot:
             "coin_blue": 412
         }
 
-        return dic_loot_types_to_costume[self.loot_type]
+        return dic_loot_types_to_costume[self.type]
 
