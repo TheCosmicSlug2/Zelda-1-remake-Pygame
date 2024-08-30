@@ -1,9 +1,19 @@
-from Main_menu import *
+from main_menu import *
 import pygame as pg
 from math import floor
+from utils import message
 
 
-""" Settings génral du jeu / joueur / ennemis """
+"""
+Si tu veux changer un truc sur le jeu, c'est ici
+Fait pas de la merde sinon tout va exploser
+Ducoup partout où y'a un "#", tu peux changer, mais ça va ptet exploser quand même
+"""
+
+
+filename = "settings.py"
+
+""" Settings général du jeu / joueur / ennemis """
 
 pg.init()
 pg.font.init()
@@ -15,8 +25,8 @@ zelda_font = pg.font.Font("ressources/fonts/zelda_original.ttf", 20)
 
 # Largeur recommandée : 1080 px pour 1000
 
-RAW_SCREEN_HEIGHT = 600
-RAW_SCREEN_WIDTH = 800
+RAW_SCREEN_HEIGHT = 600 #
+RAW_SCREEN_WIDTH = 800 #
 
 rapport_ui_fen = 265 / 1000
 rapport_game_fen = 735 / 1000
@@ -49,10 +59,14 @@ CELLSIZE_X, CELLSIZE_Y = SCREEN_GAME_DIMS[0] // nb_column, SCREEN_GAME_DIMS[1] /
 
 # Recalculer les dimensions de l'écran
 SCREEN_GAME_WIDTH, SCREEN_GAME_HEIGHT = CELLSIZE_X * nb_column, CELLSIZE_Y * nb_rows 
-print(f"\n[Settings] Anciennes dimensions ({RAW_SCREEN_DIMS[0]}, {RAW_SCREEN_DIMS[1]}) " 
-      f"recalculées à ({SCREEN_DIMS[0]}, {SCREEN_DIMS[1]}) : \n"
-      f"[Settings] UI : ({SCREEN_UI_DIMS[0], SCREEN_UI_DIMS[1]})\n"
-      f"[Settings] GAME : ({SCREEN_GAME_DIMS[0], SCREEN_GAME_DIMS[1]})\n")
+
+message(filename=filename, var_tuple=(
+    "Anciennes dimension", RAW_SCREEN_DIMS, 
+    "recalculées à", SCREEN_DIMS,
+    "UI", SCREEN_UI_DIMS,
+    "GAME", SCREEN_GAME_DIMS)
+    )
+
 
 if False:
     FULLSCREEN = True
@@ -65,8 +79,9 @@ RES = (SCREEN_DIMS[0], SCREEN_DIMS[1])
 
 
 # Couleurs
+# Tout ça tu peux changer 
 
-WHITE = (255, 255, 255)
+WHITE = (255, 255, 255) 
 BLACK = (0, 0, 0)
 RED = (255, 0, 0)
 GRAY = (100, 100, 100)
@@ -80,32 +95,50 @@ dic_colors = {0: WHITE, 1: BLACK}
 # Player
 PLAYER_DIMS = (floor(SCREEN_GAME_DIMS[0] / 16) - 2, floor(SCREEN_GAME_DIMS[1] / 11) - 2) # - 2 : valeur arbitraire pour pas de fausses collisions
 HALF_PLAYER_DIMS = (PLAYER_DIMS[0] // 2, PLAYER_DIMS[1] // 2)
+PLAYER_HITBOX_HEIGHT = round(PLAYER_DIMS[1] / 4)
+PLAYER_HITBOX_HEIGHT_DEC = PLAYER_DIMS[1] - PLAYER_HITBOX_HEIGHT
 
+# Tout ça tu peux changer
 NB_TICKS_TO_UPDATE_PLAYER = 4
 NB_TICK_PLAYER_INVICIBILITY = 60
 
-WEAPON_1 = 30
+WEAPON_DIMS = PLAYER_DIMS
+PLAYER_KNOCKBACK_FORCE = 30
 
 PLAYER_SPEED = int(CELLSIZE_X * 0.15)
-PLAYER_LIFE = 3
+PLAYER_MAX_HEALTH = 3
+PLAYER_HEALTH = 3
 PLAYER_ATTACK_POWER = 10
 
 ecart_new_level = int((CELLSIZE_X + CELLSIZE_Y) // 2) * 2 # moyenne des dimensions de la cellule 
 # Inutile de mettre un mini écart en plus au cas où étant donné qu'il clipe automatiquement à la cellule la + proche
 # Au final si on va mettre 2x l'écart pour être sûr
 
+# ça tu peux changer
 DEF_ENNEMY_DIMS = (20, 20)
-DEF_ENNEMY_LIFE = 3
+DEF_ENNEMY_HEALTH = 10
 DEF_ENNEMY_SPEED = 50
 DEF_ENNEMY_COLOR = (255, 0, 0)
 DEF_ENNEMY_HEALTH = 50
 DEF_ENNEMY_ATTACK_POWER = 2
 
-DEF_ENNEMY_KNOCKBACK = 30
+DEF_ENNEMY_KNOCKBACK = 100
+
+TICK_UNTIL_ENNEMY_SHOWS = 20
 
 BAT_DIMS = (16*2, 11*2)
-OCTOROK_DIMS = PLAYER_DIMS
-LEEVER_DIMS = PLAYER_DIMS
+BAT_SPEED = 5
+BAT_HEALTH = PLAYER_ATTACK_POWER
+OCTOROK_DIMS = (CELLSIZE_X - 10, CELLSIZE_Y - 10)
+OCTOROK_SLOW_SPEED = 3
+OCTOROK_FAST_SPEED = 5
+OCTOROK_RED_HEALTH = 20
+OCTOROK_BLUE_HEALTH = 30
+LEEVER_DIMS = (CELLSIZE_X - 10, CELLSIZE_Y - 10)
+LEEVER_SLOW_SPEED = 3
+LEEVER_FAST_SPEED = 5
+LEEVER_RED_HEALTH = 20
+LEEVER_BLUE_HEALTH = 30
 
 
 COIN_DIMS = (20, 30)
@@ -116,16 +149,27 @@ FPS = 30
 
 # SFX
 pg.mixer.init()
-song_main_menu = pg.mixer.Sound("ressources/sfx/main_menu.mp3")
+# CA SI TU CHANGES CA EXPLOSE
+#song_main_menu = pg.mixer.Sound("ressources/sfx/main_menu.mp3")
 song_overworld = pg.mixer.Sound("ressources/sfx/overworld.mp3")
-sfx_ennemy_hit = pg.mixer.Sound("ressources/sfx/ennemy_hit.wav")
-sfx_ennemy_death = pg.mixer.Sound("ressources/sfx/ennemy_dead.wav")
-sfx_link_hit = pg.mixer.Sound("ressources/sfx/link_hit.wav")
-sfx_link_dead = pg.mixer.Sound("ressources/sfx/link_dead.wav")
-sfx_sword_slash = pg.mixer.Sound("ressources/sfx/sword_slash.wav")
-sfx_get_yellow_rupy = pg.mixer.Sound("ressources/sfx/get_yellow_rupy.wav")
-sfx_get_blue_rupy = pg.mixer.Sound("ressources/sfx/get_blue_rupy.wav")
-sfx_get_heart_or_key = pg.mixer.Sound("ressources/sfx/get_heart_or_key.wav")
+sfx_ennemy_hit = pg.mixer.Sound("ressources/sfx/ennemy_hit.mp3")
+sfx_ennemy_death = pg.mixer.Sound("ressources/sfx/ennemy_dead.mp3")
+sfx_link_hit = pg.mixer.Sound("ressources/sfx/link_hit.mp3")
+sfx_link_dead = pg.mixer.Sound("ressources/sfx/link_dead.mp3")
+sfx_sword_slash = pg.mixer.Sound("ressources/sfx/sword_slash.mp3")
+sfx_get_yellow_rupy = pg.mixer.Sound("ressources/sfx/get_yellow_rupy.mp3")
+sfx_get_blue_rupy = pg.mixer.Sound("ressources/sfx/get_blue_rupy.mp3")
+sfx_get_heart_or_key = pg.mixer.Sound("ressources/sfx/get_heart_or_key.mp3")
+sfx_stairs = pg.mixer.Sound("ressources/sfx/stairs.mp3")
+sfx_shield_defuse = pg.mixer.Sound("ressources/sfx/shield_defuse.mp3")
 
-STARTING_LEVEL = 49
+
+
+# Et ça tu peux changer autant que tu veux
+STARTING_LEVEL = 120
+MIN_ENNEMIES_PER_LEVEL = 1 
+MAX_ENNEMIES_PER_LEVEL = 5 # Essaye de mettre 10 000, si t'as un bon pc tu vas kiffer 
+
+
+VISU_TIME = 0.1 # Variable débug
 
