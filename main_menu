@@ -1,6 +1,0 @@
-
-
-# Y'a rien à voir ce fichier sert à r
-
-def get_fullscreen():
-    return input("Fullscreen ? (o/n) : \n >> ") == "o"
