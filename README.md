@@ -1,4 +1,4 @@
-# Zelda-1-remake-Pygame-
+# Zelda-1-remake-Pygame
 
 A remake of the original "The Legend Of Zelda" on NES. For now, no real progression available, only full original map, the first dungeon, caverns, movements, graphisms and enemies recreated. Give it a try !
 
