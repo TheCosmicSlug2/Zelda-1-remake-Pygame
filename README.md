@@ -8,6 +8,7 @@ Made entirely with pygame.
 ----- Game : Controls ------
 
 Keyboard arrows to move
+
 Space to attack
 
 
