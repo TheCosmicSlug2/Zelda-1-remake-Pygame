@@ -28,8 +28,7 @@ La boucle de jeu est divisée en 5 parties :
 - Déplacement du joueur selon les touches pressées (avec la classe "Player" de player.py)
 - Transition d'écran possible si le joueur touche un bord
 - Déplacement des ennemis
-- Render de tout ça
-
+- Render de tout
 """
 
 class Game:
