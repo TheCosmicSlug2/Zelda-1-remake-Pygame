@@ -1,5 +1,13 @@
-from Settings import *
+from settings import *
+from utils import message
 
+
+"""
+Loadage des textures
+"""
+
+
+filename = "textures.py"
 
 def convert_to_pygame_texture(texture_path: str, dims: tuple) -> pg.surface:
     """
@@ -28,13 +36,13 @@ def load_textures(dic_path: dict, texture_size: list, cell_dims: tuple) -> dict:
     :return:
     """
 
-    print("\n[TextureLoader] : Les textures suivantes ont été mises à la taille par défaut : \n")
+    message(filename=filename, message="Les textures suivantes ont été mises à la taille par défaut : ", saut_precedant=True)
 
     # 1er élément de ce dictionnaire utilisé pour dessiner le cache du décor
-    dic_textures = {"dims": cell_dims}
+    dic_textures = {}
 
     # Pour pas avoir à réécrire toutes les extensions
-    dir_textures_path = "ressources/textures/"
+    
     texture_ext = ".png"
 
     # Pour chaque idx_de_texture, nom_de_la_texture
@@ -42,9 +50,28 @@ def load_textures(dic_path: dict, texture_size: list, cell_dims: tuple) -> dict:
         # Pour chaque idx_de_liste de la liste texture_size
         found = False
 
+        dir_textures_path = "ressources/textures/"
+
+        if texture_ID < 50: # Sols:
+            dir_textures_path += "ground/"
+        elif texture_ID < 200: # Murs
+            dir_textures_path += "wall/"
+        elif texture_ID < 300: # Link
+            dir_textures_path += "link/"
+        elif texture_ID < 400: # Ennemies
+            dir_textures_path += "ennemy/"
+        elif texture_ID < 500: # Loot
+            dir_textures_path += "loot/"
+        elif texture_ID < 600: # Weapons
+            dir_textures_path += "weapons/"
+        elif texture_ID < 700: # Particles
+            dir_textures_path += "particles/"
+        else:
+            dir_textures_path += "ui_icon/"
+
         dic_textures[texture_ID] = convert_to_pygame_texture(
             dir_textures_path + texture_name + texture_ext,
-            dic_textures["dims"]
+            cell_dims
         )
         for texture_family_idx in range(len(texture_size)):
             # Si l'idx est 0 : dims = cellsizex, cellsizey (dimensions possiblement non constantes)
@@ -60,7 +87,7 @@ def load_textures(dic_path: dict, texture_size: list, cell_dims: tuple) -> dict:
                 found = True
 
         if found == False:
-            print(f"\"{texture_name}\"", end="\n")
+            message(filename=filename, message=f"\"{texture_name}\"")
     
-    print("\nTextures crées\n")
+    message(filename=filename, message="Textures crées", saut_precedant=True)
     return dic_textures
