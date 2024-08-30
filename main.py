@@ -1,127 +1,98 @@
-import time
-import Textures
-from Player import Player
-from Map import *
-from Change_level import *
-from Ennemy import DefEnnemy, Bat, Octorok, Leever
-from Loot import Loot
-from sys import exit as sysexit
+import textures
+from player import Player
+from level_master import *
+from settings import *
+from ennemy import DefEnnemy, Bat, Octorok, Leever
+from renderer import Renderer
+from physics import Physics
+from loot import Loot
+from random import choice, randint
 
+
+# Module pour détecter oprimisations possibles
+# from profilehooks import profile
+
+
+"""
+Fichier contenant:
+- la classe "Game" (un peu un fourre-tout de fonction qui gèrent l'état du jeu)
+- la boucle principale de jeu
+"""
+
+
+"""
+INFOS POUR COMPRENDRE TOUT CA :
+
+La boucle de jeu est divisée en 5 parties :
+- Capture des événements claviers (avec la classe "Game" de main.py)
+- Déplacement du joueur selon les touches pressées (avec la classe "Player" de player.py)
+- Transition d'écran possible si le joueur touche un bord
+- Déplacement des ennemis
+- Render de tout ça
+
+"""
 
 class Game:
-    def __init__(self, res: tuple, fullscreen: bool) -> None:
-        self.screen_dims = res
-        self.screen_game_dims = SCREEN_GAME_DIMS
-        self.screen_ui_dims = SCREEN_UI_DIMS
-        self.SCREEN = pg.display.set_mode(self.screen_dims, pg.FULLSCREEN) if fullscreen else pg.display.set_mode(res)
-        pg.display.set_caption("2D RPG")
-        self.clock = pg.time.Clock()
+    def __init__(self, level_master: LevelMaster) -> None:
+
+        self.level_master = level_master
         self.tick_counter = 0
-
-        self.map_data = []
-        self.nb_row, self.nb_column = 0, 0
-        self.cellsize_x, self.cellsize_y = 0, 0
-
         self.texture_loader = None
-        self.dic_textures = {}
 
+        self.current_background = None
+        self.liste_ennemies = []
+        self.liste_loots = []
 
-    def update_self_to_map(self, level: Map) -> None:
-
-        """ Update les dimensions des cellules """
-
-        self.map_data = level.map_data
-        self.nb_row, self.nb_column = level.nb_row, level.nb_column
-        self.cellsize_x, self.cellsize_y = level.cellsize_x, level.cellsize_y
-
-
-    def update(self) -> None:
-
-        """ Update l'écran, le tick global du jeu et les FPS """
-
-        pg.display.flip()
-        self.clock.tick(FPS)
-        pg.display.set_caption(f"2D RPG : {self.clock.get_fps():.0f} FPS")
-        self.tick_counter = (self.tick_counter + 1) % 30
+        self.hold_memory_ennemies = []
+        self.hold_memory_loots = []
 
 
     @staticmethod
     def check_events_and_attack() -> bool:
 
-        """ Capture la sortie du jeu et l'attaque avec "espace" """
+        """ Capture le quittage du jeu par l'user et l'attaque du joueur s'il utilise la touche "espace" """
+
+        game_running = True
 
         attack = False
         for pg_event in pg.event.get():
             if pg_event.type == pg.QUIT or (pg_event.type == pg.KEYDOWN and pg_event.key == pg.K_ESCAPE):
-                pg.quit()
-                sysexit()
+                game_running = False
 
 
             if pg_event.type == pg.KEYDOWN and pg_event.key == pg.K_SPACE:
                 attack = True
 
-        return attack
-
-
-    @staticmethod
-    def get_moving_player_sprite(player: Player, dic: dict, moving_tic: int) -> pg.surface:
-
-        """ Pour n'importe quel tick, renvoie l'exacte animation de mouvement de link """
-
-        dic_player_costumes = {
-            "bas": 201,
-            "gauche": 203,
-            "haut": 205,
-            "droite": 207
-        }
-
-        base_direction_costume = dic_player_costumes[player.dir]
-        return dic[base_direction_costume + moving_tic]
-
-
-    @staticmethod
-    def get_attack_player_sprite(player: Player, dic: dict, attack_tic: int) -> pg.surface:
-
-        """ Pour n'importe quel tick, renvoie l'exacte animation d'attaque de link """
-
-        player_dir = player.dir
-        dic_player_costumes = {
-            "bas": 221,
-            "gauche": 241,
-            "haut": 261,
-            "droite": 281
-        }
-
-        base_direction_costume = dic_player_costumes[player_dir]
-        return dic[base_direction_costume + attack_tic]
+        return attack, game_running
     
 
-    @staticmethod
-    def create_ennemies_instances(player: Player, dic_ennemy_pos: dict) -> list[DefEnnemy]:
+    def create_ennemies_instances(self, player: Player) -> list[DefEnnemy]:
 
-        """ Créé une liste d'instances d'ennemis à partir de leurs positions et types """
+        """ 
+        Créé une liste d'instances d'ennemis selon le niveau à partir de leurs positions et types 
+        Chaque ennemi est défini en fonction du joueur, pour qu'il connaisse sa position et voit s'il le touche
+        """
 
-        local_liste_ennemies = []
-        for ennemy_id in dic_ennemy_pos:
-            ennemy_type = dic_ennemy_pos[ennemy_id][0]
-            ennemy_cell_coords = (dic_ennemy_pos[ennemy_id][1][0], dic_ennemy_pos[ennemy_id][1][1])
+        self.liste_ennemies = []
+        for ennemy_id, ennemy_data in self.level_master.current_ennemy_positions.items():
+            ennemy_type = ennemy_data[0]
+            ennemy_cell_coords = (ennemy_data[1][0], ennemy_data[1][1])
 
             if ennemy_type.startswith("octorok") or ennemy_type.startswith("leever"):
                 type_, color = ennemy_type.split('_')
+                str_speed = choice(["slow", "fast"])
                 if type_ == "octorok":
-                    local_liste_ennemies.append(
-                        Octorok(player=player, spawning_id=ennemy_id, color=color, cell_coords=ennemy_cell_coords)
+                    self.liste_ennemies.append(
+                        Octorok(player=player, level_master=self.level_master, spawning_id=ennemy_id, color=color, cell_coords=ennemy_cell_coords, speed=str_speed)
                     )
                 elif type_ == "leever":
-                    local_liste_ennemies.append(
-                        Leever(player=player, spawning_id=ennemy_id, color=color, cell_coords=ennemy_cell_coords)
+                    self.liste_ennemies.append(
+                        Leever(player=player, level_master=self.level_master, spawning_id=ennemy_id, color=color, cell_coords=ennemy_cell_coords, speed=str_speed)
                     )
             elif ennemy_type == "bat":
-                local_liste_ennemies.append(
-                    Bat(player=player, spawning_id=ennemy_id, cell_coords=ennemy_cell_coords)
+                self.liste_ennemies.append(
+                    Bat(player=player, level_master=self.level_master, spawning_id=ennemy_id, cell_coords=ennemy_cell_coords)
                 )
-
-        return local_liste_ennemies
 
 
     @staticmethod
@@ -129,60 +100,58 @@ class Game:
 
         """ Renvoir un nombre aléatoire symbolisant le loot que l'adversaire drop """
 
-        if randint(1, 3) == 3: # 1 chance sur 3
+        if randint(1, 3) == 3: # 1 chance sur 3 de ne rien faire tomber
             return None
         return Loot(ennemy_x, ennemy_y, player)
     
 
-    def remove_ennemies_from_dic_add_loot(self, current_level_id: int, liste_ennemies: list, player) -> list[Loot]:
+    def remove_ennemies_from_dic_add_loot(self, player) -> list[Loot]:
 
-        """ Enlève les ennemis du gros dictionnaire de position et créé leur loot (s'il existe) """
+        """ Enlève les ennemis du gros dictionnaire de positions d'ennemis et créé leur loot (si cet ennemi en drop un) """
 
         new_loots = []
 
         # Enlever ennemies mort du dictionnaire et ajoute loot
-        for ennemy in liste_ennemies:
+        for ennemy in self.liste_ennemies:
             if ennemy.health <= 0:
                 pg.mixer.Sound.play(sfx_ennemy_death)
-                global_dic_ennemy_nb_positions[current_level_id].pop(ennemy.spawning_ID)
+                global_dic_ennemy_nb_positions[self.level_master.current_level_ID].pop(ennemy.spawning_ID)
                 new_loots.append(self.get_ennemy_loot(ennemy.posx, ennemy.posy, player))
 
-        return [loot for loot in new_loots if loot is not None]
+        self.liste_loots.extend([loot for loot in new_loots if loot is not None])
 
 
-    def check_ennemy_health(self, liste_ennemies: list) -> tuple:
+    def check_ennemy_health(self) -> tuple:
 
-        """ Créer les loots, supprime les ennemis à l'écran et dans le dictionnaire d'ennemies """
+        """ Supprime les ennemis morts de la liste, signifiants qu'ils ne seront pas dessinés à l'écran """
 
         # Enlever ennemies morts de la liste à dessiner
-        liste_ennemies = [ennemy for ennemy in liste_ennemies if ennemy.health > 0]
-
-        return liste_ennemies
+        self.liste_ennemies = [ennemy for ennemy in self.liste_ennemies if ennemy.health > 0]
 
 
-    def update_ennemies_positions(self, liste_ennemies) -> None:
+    def update_ennemies_positions(self) -> None:
 
         """ Update les ennemis en fonction du temps (si tick spécial : recalculer direction au joueur) """
 
         update_required = self.tick_counter % FPS == 0
-        for ennemy in liste_ennemies:
-            ennemy.go_to_player(update=update_required)
+        for ennemy in self.liste_ennemies:
+            ennemy.do_something(update=update_required)
     
 
-    def update_loot_text(self, liste_loot: list[Loot]) -> None:
+    def update_loot_text(self) -> None:
 
-        """ Update les costumes des loot en fonction du tick global du jeu """
+        """ Update (fait "osciller") les costumes des loot en fonction du tick global du jeu """
 
-        for loot in liste_loot:
+        for loot in self.liste_loots:
 
             if not self.tick_counter % 4 == 0: # Update tous les 4 ticks
                 continue
 
-            if loot.loot_type in ["heart_small", "coin_yellow"]:
+            if loot.type in ["heart_small", "coin_yellow"]:
                 if self.tick_counter % 8 == 0:
-                    loot.sprite_id = 403 if loot.loot_type == "heart_small" else 411
+                    loot.sprite_id = 403 if loot.type == "heart_small" else 411
                 else:
-                    loot.sprite_id = 404 if loot.loot_type == "heart_small" else 412
+                    loot.sprite_id = 404 if loot.type == "heart_small" else 412
 
 
     @staticmethod
@@ -195,10 +164,10 @@ class Game:
 
         keys = pg.key.get_pressed()
         key_direction_map = {
-            pg.K_z: "haut",
-            pg.K_s: "bas",
-            pg.K_q: "gauche",
-            pg.K_d: "droite"
+            pg.K_UP: "haut",
+            pg.K_DOWN: "bas",
+            pg.K_LEFT: "gauche",
+            pg.K_RIGHT: "droite"
         }
 
         for key, direction in key_direction_map.items():
@@ -208,224 +177,217 @@ class Game:
         return False, current_player_dir
 
 
-    def transition_level(
-            self, 
-            ancient_background: pg.Surface, 
-            new_background: pg.Surface, 
-            ui: pg.Surface, 
-            direction: str, 
-            transition_duration: int, 
-            px_par_update: int
-            ) -> None:
+    def transition_beetween_levels(self, level_master, renderer, player, player_sprite, dic_textures):
         
-        """ Transitionne entre 2 niveaux """
+        """ 
+        Fonction pour la transition artistique entre chaque niveau :
+        3 étapes : 
+        - Changer les données du niveau que possède "level_master"
+        - Dessiner le nouveau niveau dans une variable
+        - Effectuer la transition à partir de l'ancien niveau et du nouveau (différentes transitions si le joueur entre dans une cave/dongeon)
+        - Créé les ennemis du nouveau niveau / ajuste la position du joueur
+        """
+
+        # Changer et dessiner le level
+        level_master.change_level(scroll_direction=player.current_level_transition)
+
+        # On peut changer ça à tout moment par
+        # ancient_level = current_background
+        ancient_level = renderer.render_on_surface(
+            background=self.current_background,
+            liste_loots=self.liste_loots,
+            liste_ennemies=self.liste_ennemies,
+            player_sprite=player_sprite,
+            player_pos=(player.posx, player.posy)
+        )
+
+        if player.current_level_transition == "get_in_secret":
+            renderer.transition_into_secret(
+                background=self.current_background,
+                ui = player.ui_cache,
+                player=player,
+                player_sprite=player_sprite
+            )
+            self.current_background = renderer.draw_map_cache(dic_textures=dic_textures)
+            player.adjust_pos_to_get_into_secret()
+
+        if player.current_level_transition == "get_out_secret":
+            self.current_background = renderer.draw_map_cache(dic_textures=dic_textures)
+            player.adjust_pos_to_get_out_of_secret()
+            renderer.transition_out_of_secret(
+                background=self.current_background,
+                ui=player.ui_cache,
+                player=player,
+                player_sprite=player_sprite
+            )
+        else:
+            self.current_background = renderer.draw_map_cache(dic_textures=dic_textures)
+            renderer.transition_level(ancient_background=ancient_level, 
+                                    new_background=self.current_background,
+                                    ui = player.ui_cache,
+                                    direction=player.current_level_transition, 
+                                    transition_duration=1, 
+                                    px_par_update=5
+            )
         
-        # Longueur totale de la transition
-        if direction in ["bas", "haut"]:
-            total_size = SCREEN_GAME_HEIGHT
+        
+            player.adjust_pos_to_scrollage(player.current_level_transition)
 
-        elif direction in ["droite", "gauche"]:
-            total_size = SCREEN_GAME_WIDTH
+        if player.current_level_transition == "get_in_secret":
+            if level_master.current_level_ID < 201:
+                level_master.current_world_type = "cavern"
+            else:
+                level_master.current_world_type = "dungeon"
+        elif player.current_level_transition == "get_out_secret":
+            level_master.current_world_type = "overworld"
         else:
-            return "MAUVAISE VALEUR DE DIRECTION"
-
-        # De où doit partir l'index 
-        if direction in ["bas", "droite"]:
-            current_size = total_size
-        else:
-            current_size = 0
-
-        # Le temps entre chaque frame de transition
-        duration_beetween_frames = transition_duration / (total_size / px_par_update) # durée / nb_frames quoi
+            player.update_ui_cache_minimap()
 
 
-        if direction == "haut":
-            while current_size < total_size: # on part du bas de l'écran
-                self.SCREEN.blit(new_background, (0, current_size-total_size + self.screen_ui_dims[1])) # le nouveau a la marque : on le met avant
-                self.SCREEN.blit(ancient_background, (0, current_size + self.screen_ui_dims[1]))
-                self.SCREEN.blit(ui, (0, 0))
-                pg.display.update()
-                current_size += px_par_update
-                time.sleep(duration_beetween_frames)
+        # Supprimer les loots
+        self.liste_loots = []
 
-        if direction == "gauche":
-            while current_size < total_size:
-                self.SCREEN.blit(ancient_background, (current_size, self.screen_ui_dims[1]))
-                self.SCREEN.blit(new_background, (current_size-total_size, self.screen_ui_dims[1]))
-                pg.display.update()
-                current_size += px_par_update
-                time.sleep(duration_beetween_frames)
+        # Changer les ennemies
+        self.create_ennemies_instances(player=player)
 
-        if direction == "bas":
-            while current_size > 0:
-                self.SCREEN.blit(ancient_background, (0, current_size - total_size + self.screen_ui_dims[1]))
-                self.SCREEN.blit(new_background, (0, current_size + self.screen_ui_dims[1]))
-                self.SCREEN.blit(ui, (0, 0))
-                pg.display.update()
-                current_size -= px_par_update
-                time.sleep(duration_beetween_frames)  # TODO Un peu unsafe
 
-        if direction == "droite":
-            while current_size > 0:
-                self.SCREEN.blit(ancient_background, (current_size - total_size, self.screen_ui_dims[1]))
-                self.SCREEN.blit(new_background, (current_size, self.screen_ui_dims[1]))
-                pg.display.update()
-                current_size -= px_par_update
-                time.sleep(duration_beetween_frames)
-
+        player.triggered_level_transition = False
+        player.current_level_transition = None
 
     
-    def draw_every_ennemies(self, liste_ennemies: list[DefEnnemy]) -> None:
-
-        """ Dessin des ennemis à l'écran """
-
-        for ennemy in liste_ennemies:
-            ennemy_texture_id = ennemy.get_sprite_id(self.tick_counter)
-            self.SCREEN.blit(self.dic_textures[ennemy_texture_id], (ennemy.posx, ennemy.posy + self.screen_ui_dims[1]))
-
-
-    def draw_every_loot(self, liste_loot: list[Loot]) -> None:
-
-        """ Deesin des loots à l'écran"""
-
-        for loot in liste_loot:
-            self.SCREEN.blit(self.dic_textures[loot.sprite_id], (loot.posx, loot.posy + self.screen_ui_dims[1]))
-
-
-    @staticmethod
-    def check_collision(x1, y1, w1, h1, x2, y2, w2, h2):
-
-        """ Fonction globale pour checker les collisions """
-
-        return x1 + w1 > x2 and x2 + w2 > x1 and y1 + h1 > y2 and y2 + h2 > y1
-    
-    
-
-
+#@profile(stdout=False, filename='g.prof')  # <== Profiling
 
 def main():
 
-    pg.mixer.Sound.play(song_overworld)
+    pg.mixer.Sound.play(song_overworld, loops=-1) # "-1" -> Boucle infiniment
 
-    """ Init """
+    """ Init/Préprocessing """
 
+    # La classe qui gère l'écran/le renderage...
+    renderer = Renderer(res=RES, fullscreen=False)
 
-    level_changer = LevelMaster()
-    current_level_id = level_changer.current_level_ID
-    game = Game(res=RES, fullscreen=False)
+    # Classe pour la physique des objets
+    physics = Physics()
+    
 
-    # Obligé de définir après le game, sinon pas de video mode
-    dic_textures = Textures.load_textures(dic_path=dic_textures_name, texture_size=liste_textures_size,
-                                        cell_dims=(CELLSIZE_X, CELLSIZE_Y))
-    level = Map(current_level_id)
-    game.update_self_to_map(level)
-    game.dic_textures = dic_textures
+    # Dictionnaire de toutes les textures, sous la forme : {idx-de-la-texture: texture}
+    dic_textures = textures.load_textures(
+        dic_path=dic_textures_name, 
+        texture_size=liste_textures_size,
+        cell_dims=(CELLSIZE_X, CELLSIZE_Y)
+    )
+    renderer.dic_textures = dic_textures
+    
+    # Classe possédant toutes les données du niveau actuel/ dimensions des cellules/ nb de colomnes et lignes...
+    # Tous les objets du jeu possèdent une instance de cette classe parce qu'elle est putain d'importante
+    level_master = LevelMaster()
 
-    level_background_cache = level.draw_map_cache(dic_textures=dic_textures)
-    player = Player(game=game, dic_textures= dic_textures)
-    player_sprite = game.get_moving_player_sprite(player, dic_textures, moving_tic=0)
-    player.draw_ui_cache(level_id=current_level_id)
-    ennemy_pos = global_dic_ennemy_nb_positions[current_level_id]
-    liste_ennemies = game.create_ennemies_instances(player=player, dic_ennemy_pos=ennemy_pos)
+    # C'est moche de l'initialiser comme ça mais flemme
+    renderer.level_master = level_master
 
-    attack_tick_counter = 0
-    active_movement = False
+    # Classe principale
+    game = Game(level_master=level_master)
+
+    # Premier "fond d'écran de jeu" que le joueur verra
+    game.current_background = renderer.draw_map_cache(dic_textures=dic_textures)
+
+    # Joueur
+    player = Player(level_master=level_master, dic_textures=dic_textures)
+    player_sprite = player.get_moving_sprite(moving_tic=0)
+    player.draw_ui_cache() # "ui", c'est ce qu'il y a en haut de l'écran
+    
+    # Ennemies de l'écran actuel
+    game.create_ennemies_instances(player=player)
+
+    # Arme du joueur
+    weapon_sprite = None
+    weapon_pos = None
+
+    # Le joueur possède 2 directions : l'actuelle et l'ancienne, pour savoir si sa direction a changé et pour pouvoir le "snapper" à la grille
     ancienne_dir = player.dir
     player_costume = 0
-    scroll_direction = None
-    bool_attaque = False
-    liste_loots = []
 
-    running = True
-    while running:
+
+    # Boucle principale de jeu
+    game_running = True
+    while game_running:
 
         """ I/ Joueur """
 
-        # 1) Mouvement brut
+        # 1) Mouvement du joueur
 
-        if bool_attaque: # permet de ne pas bouger le joueur si il attaque
-            player.attack(liste_ennemies)
-
+        if player.is_attacking: # permet de ne pas bouger le joueur s'il attaque
+            player.attack(game.liste_ennemies)
         else: 
-            bool_attaque = game.check_events_and_attack()
-            active_movement, player.dir = game.check_key_pressed(player.dir)
+            player.is_attacking, game_running = game.check_events_and_attack()
+            player.is_moving, player.dir = game.check_key_pressed(current_player_dir=player.dir)
 
-            # Si il y a un changement de direction, on snap
+            # Si il y a un changement de direction, on snap à la grille
             if player.dir != ancienne_dir:
                 ancienne_dir = player.dir
                 player.snap_to_grid()
 
-            # Si le joueur se déplace, on précise qu'il n'est plus snappé à la grille
-            if active_movement:
-                player.snapped_to_grid = False
-                scroll_direction = player.move()
-        
+            # On laisse ensuite le joueur se déplacer
+            if player.is_moving:
+                player.move()
 
-        # 2) Transition d'écran
-                
+        if level_master.current_secret_exist: # S'il y a un "secret" dans le niveau actuel
+            if physics.is_touching_secret( # On checke si le joueur touche le secret. 
+                # J'ai créé un 2ème "if" afin de ne pas avoir à checker les 2 conditions avec "and": calculer si le joueur touche le secret demande des caluls et il ne faudrait pas le faire si le secret n'existe pas au préalable
+                (player.posx, player.posy),
+                PLAYER_DIMS,
+                player.dir,
+                level_master.current_secret_position,
+                level_master.cell_dims
+            ):
+                player.snap_to_grid() # Si c'est le cas, on snap le joueur et change des variables pour dire qu'il y a une transition d'écran
+                player.current_level_transition = "get_in_secret"
+                player.triggered_level_transition = True
+                level_master.current_world_type = "cavern"
 
-        if scroll_direction:
-            # Changer et dessiner le level
-            current_level_id = level_changer.change_level(ancient_level_id=current_level_id,
-                                                          scroll_direction=scroll_direction)
-            ancient_level = level_background_cache
+        # 2) Transition d'écran                
 
-            level.change_level(new_level_id=current_level_id, game_textures=dic_textures)
-            level_background_cache = level.draw_map_cache(dic_textures=dic_textures)
-
-            game.transition_level(ancient_background=ancient_level, 
-                                  new_background=level_background_cache,
-                                  ui = player.ui_cache,
-                                  direction=scroll_direction, transition_duration=1, px_par_update=5)
-
-            game.update_self_to_map(level=level)
-
-            player.update_ui_cache_minimap(level_id=current_level_id)
-
-            #game.update_to_map(level.map_data)
-            player.update_to_map()
+        if player.triggered_level_transition:
+            game.transition_beetween_levels(
+                level_master=level_master,
+                renderer=renderer,
+                player=player,
+                player_sprite=player_sprite,
+                dic_textures=dic_textures
+            )
+            player.triggered_level_transition = False
             
-            # Supprimer les loots
-            liste_loots = []
 
-            # Changer les ennemies
-            ennemy_pos = global_dic_ennemy_nb_positions[current_level_id]
-            liste_ennemies = game.create_ennemies_instances(player=player, dic_ennemy_pos=ennemy_pos)
-
-            scroll_direction = None
-
-
-        # 3) Joueur par rapport aux ennemis et au loot
+        # 3) Réaction du joueur par rapport aux ennemis et au loot
 
         if player.invicible:
+            # Si le joueur est invincible, on augmente un compteur jusqu'à un certain point, puis on enlève l'invincibilité
+            player.tick_invicibility += 1
             if player.tick_invicibility > NB_TICK_PLAYER_INVICIBILITY:
                 player.invicible = False
-                player.tick_invicibility = 0
-            player.tick_invicibility += 1
+                player.tick_invicibility =  0
+            
         
-        if liste_loots:
-            player.grab_loot(liste_loot=liste_loots)
-            game.update_loot_text(liste_loots)
-
+        if game.liste_loots: 
+            # S'il y a des loots à l'écran : on checke si le joueur en a attrapé un, et on update les costumes des loots
+            player.grab_loot(liste_loot=game.liste_loots)
+            game.update_loot_text()
 
         
 
         """ II/ Ennemis, Loot """
 
-        # Supprimer les ennemis morts du dictionnaire / créer la liste des nouveaux loots
-        new_loots = game.remove_ennemies_from_dic_add_loot(current_level_id, liste_ennemies, player=player)
-
-        # Ajouter le loot des ennemis morts au loot présent
-        liste_loots.extend(new_loots)
+        # Supprimer les ennemis morts du dictionnaire / Ajoute les loots droppés
+        game.remove_ennemies_from_dic_add_loot(player=player)
 
         # Suprrimer les ennemies morts de l'écran
-        liste_ennemies = game.check_ennemy_health(liste_ennemies)
+        game.check_ennemy_health()
 
-        # Aller au joueur
-        game.update_ennemies_positions(liste_ennemies)
+        # Update les positions des ennemies
+        game.update_ennemies_positions()
 
 
-        """ III/ Calcul des costumes et render des éléments """
+        """ III/ Calcul des costumes de chaque élément et render des éléments """
 
         # Calcul du costume du joueur
 
@@ -433,32 +395,46 @@ def main():
             player_costume = (player_costume + 1) % 2
             player.tick_counter = 0
 
-        if bool_attaque: # 
-            player_sprite = game.get_attack_player_sprite(player, dic_textures, attack_tick_counter//2)
+        if player.is_attacking: 
+            # Si le joueur attaque, on cherche le costume de tous les éléments de son animation d'attaque
+            player_sprite = player.get_attack_sprite(player.tick_attack//2)
+            weapon_sprite = player.get_weapon_sprite()
+            weapon_pos = player.get_weapon_position(player.tick_attack)
 
-            attack_tick_counter += 1
-            if attack_tick_counter == 8:
-                attack_tick_counter = 0
-                bool_attaque = False
+            player.tick_attack += 1
+            if player.tick_attack == 8:
+                player.tick_attack = 0
+                player.is_attacking = False
                 player.play_attack_sfx = True
-                player_sprite = game.get_moving_player_sprite(player, dic_textures, player_costume)
+                weapon_sprite = None
+                player_sprite = player.get_moving_sprite(player_costume)
 
-        elif active_movement: # La direction de link
-            player_sprite = game.get_moving_player_sprite(player, dic_textures, player_costume)
+        elif player.is_moving or player.invicible:
+            player_sprite = player.get_moving_sprite(player_costume)
 
 
         # 2) Dessin des éléments à l'écran
 
-        game.SCREEN.blit(player.ui_cache, (0, 0))
-        game.SCREEN.blit(level_background_cache, (0, game.screen_ui_dims[1]))
-        game.draw_every_loot(liste_loot=liste_loots)
-        game.draw_every_ennemies(liste_ennemies=liste_ennemies)
-        game.SCREEN.blit(player_sprite, (player.posx, player.relative_posy + game.screen_ui_dims[1]))
-        game.update()
+        renderer.render_on_screen(
+            ui=player.ui_cache,
+            background=game.current_background,
+            liste_loots=game.liste_loots,
+            liste_ennemies=game.liste_ennemies,
+            player_sprite=player_sprite,
+            player_pos=(player.posx, player.posy),
+            weapon_sprite=weapon_sprite,
+            weapon_pos=weapon_pos
+        )
 
+
+        # Update le display
+        renderer.update()
+
+        game.tick_counter = (game.tick_counter + 1) % 30
 
         player.tick_counter += 1
 
 
 if __name__ == "__main__":
     main()
+    
