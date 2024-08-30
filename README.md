@@ -11,4 +11,6 @@ Space to attack
 ----- Level Editor : Controls -------
 Press "s" in the editor to show the possible actions
 
+Code comments are only in french for now... :(
+
 
